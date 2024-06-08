@@ -1,106 +1,110 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 
-def in_range(x, a, b):
-    return a <= x and x <= b 
+splits_number = 2
+split_width = 0.001
+period = 0.005
+wave_length = 500e-9
+end_angle = 0.01
+step_count = 10000
 
-def wavelength_to_rgb(wavelength):
-    gamma = 0.80
-    intensity_max = 255
-    colors = {'red': 0.0, 'green': 0.0, 'blue': 0.0}
+def intensive(splits_number, split_width, period, wave_length, rad):
+    alpha = (np.pi * split_width * np.sin(rad)) / wave_length
+    beta = (np.pi * period * np.sin(rad)) / wave_length
+    return (np.sin(splits_number * beta) / np.sin(beta)) ** 2 * (np.sin(alpha) / alpha) ** 2
 
-    # Диапазоны длины волны и соответствующие значения цветов
-    ranges = [
-        ((380, 440), {'red': lambda x: (440 - x) / (440 - 380), 'blue': 1.0}),
-        ((440, 490), {'green': lambda x: (x - 440) / (490 - 440), 'blue': 1.0}),
-        ((490, 510), {'green': 1.0, 'blue': lambda x: (510 - x) / (510 - 490)}),
-        ((510, 580), {'red': lambda x: (x - 510) / (580 - 510), 'green': 1.0}),
-        ((580, 645), {'red': 1.0, 'green': lambda x: (645 - x) / (645 - 580)}),
-        ((645, 781), {'red': 1.0}),
-    ]
+def count_graph_data(splits_number, split_width, period, wave_length, end_angle, step_count):
+    step = end_angle * 2 / step_count
+    intensive_data = []
+    angle_data = []
 
-    # Определение цветовых компонент
-    for (start, end), color_values in ranges:
-        if start <= wavelength < end:
-            for color, value in color_values.items():
-                if callable(value):
-                    colors[color] = value(wavelength)
-                else:
-                    colors[color] = value
+    for rad in np.arange(-end_angle, end_angle + step, step):
+        intensive_data.append(intensive(splits_number, split_width, period, wave_length, rad))
+        angle_data.append(rad)
 
-    if 380 <= wavelength < 420:
-        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380)
-    elif 420 <= wavelength < 701:
-        factor = 1.0
-    elif 701 <= wavelength < 781:
-        factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700)
+    return np.array(intensive_data), np.array(angle_data)
+
+def wave_length_to_rgb(wavelength, gamma):
+    wave_len = wavelength / 1e-9
+    if 380 <= wave_len <= 440:
+        return 0.5 * gamma, 0, 0.5 * gamma
+    elif 440 <= wave_len <= 490:
+        return 0, 0, 1.0
+    elif 490 <= wave_len <= 510:
+        return 0.0, gamma, gamma
+    elif 510 <= wave_len <= 580:
+        return 0, gamma, 0.0
+    elif 580 <= wave_len <= 645:
+           return gamma, 0.5 * gamma, 0
+    elif 645 <= wave_len <= 770:
+        return gamma, 0.0, 0.0
     else:
-        factor = 0.0
+        return gamma, gamma, gamma
 
-    for color in colors:
-        if colors[color] != 0:
-            colors[color] = round(intensity_max * (colors[color] * factor) ** gamma)
+def draw_lines(intensive_data, angle_data, wave_length, end_angle):
+    fig, ax = plt.subplots()
+    canvas = FigureCanvasTkAgg(fig, master=root)
+    ax.cla()
 
-    return [colors['red'], colors['green'], colors['blue']]
+    min_x = -end_angle
+    max_x = end_angle
+    max_intensity = np.max(intensive_data)
 
-def run_simulation():
-    d = float(entry_d.get())
-    N = float(entry_N.get())
+    for i in range(len(intensive_data)):
+        normalized_x = (angle_data[i] - min_x) / (max_x - min_x)
+        line_x = normalized_x * canvas.get_tk_widget().winfo_width()
+        color = wave_length_to_rgb(wave_length, abs(intensive_data[i] / max_intensity))
 
-    lambda1 = float(entry_lambda1.get())
-    lambda2 = float(entry_lambda2.get())
-    lambda3 = float(entry_lambda3.get())
-    lambdas = [lambda1, lambda2, lambda3]
+        ax.plot([line_x, line_x], [0, canvas.get_tk_widget().winfo_height()], color=color, linewidth=0.1)
 
-    def intensity(theta, wavelength):
-        beta = (np.pi * d * np.sin(theta)) / wavelength
-        return (np.sin(N * beta) / np.sin(beta)) ** 2 * (np.sinc(beta / np.pi)) ** 2
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-    if not (in_range(lambda1, d / 10, d * 10) and in_range(lambda2, d / 10, d * 10)):
-        print('Дифракционная картина не может наблюдаться, будет сплошной спектр (d << alpha)')
-        exit()
+def draw_graph(intensive_data, angle_data):
+    fig, ax = plt.subplots()
+    ax.plot(angle_data, intensive_data, color='blue')
+    ax.set_xlabel('Angle Θ, rad')
+    ax.set_ylabel('Intensity I/I₀, W/m²')
+    ax.grid(True)
 
-    theta = np.linspace(-np.pi / 1000, np.pi / 1000, 10000)
+    canvas = FigureCanvasTkAgg(fig, master=root)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-    intensities = list(map(lambda k: intensity(theta, k), lambdas))
-
-    plt.figure(figsize=(10, 10))
-    plt.subplot(2, 1, 1)
-    for i in intensities:
-        plt.plot(np.degrees(theta), i)
-    plt.xlabel('Угол дифракции (градусы)')
-    plt.ylabel('Интенсивность')
-    plt.title(f'Дифракционная картина для {len(intensities)} близких спектральных линий')
-    plt.grid(True)
-
-    width = len(theta)
-    height = 100
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-
-    for i in range(width):
-        wavelength = lambda1 if intensities[0][i] > intensities[1][i] else lambda2
-        color = wavelength_to_rgb(wavelength * 1e9)
-        image[:, i] = color
+def on_submit():
+    splits_number = int(entries["Количество разбиений"].get())
+    split_width = float(entries["Ширина разбиений"].get())
+    period = float(entries["Период"].get())
+    wave_length = float(entries["Длина волны"].get())
+    end_angle = float(entries["Конечный угол"].get())
+    step_count = int(entries["Количество шагов"].get())
     
-    plt.subplot(2, 1, 2)
-    plt.imshow(image, aspect='auto', extent=(-np.pi / 1000, np.pi / 1000, 0, 1))
-    plt.xlabel('Угол дифракции (градусы)')
-    plt.yticks([])
-    plt.title('Цветной дифракционный спектр')
-    plt.show()
+    intensive_data, angle_data = count_graph_data(
+        splits_number,
+        split_width,
+        period,
+        wave_length,
+        end_angle,
+        step_count
+    )
 
+    draw_graph(intensive_data, angle_data)
+    draw_lines(intensive_data, angle_data, wave_length, end_angle)
 
 root = tk.Tk()
-root.title("Параметры системы")
+root.title("Graph Plotter")
 
 fields = [
-    ("период решетки в метрах", "1e-6"),
-    ("Число штрихов", "1500"),
-    ("Длина волны 1 в метрах", "460e-9"),
-    ("Длина волны 2 в метрах", "510e-9"),
-    ("Длина волны 3 в метрах", "550e-9"),
+    ("Количество разбиений", "2"),
+    ("Ширина разбиений", "0.001"),
+    ("Период", "0.005"),
+    ("Длина волны", "600e-9"),
+    ("Конечный угол", "0.001"),
+    ("Количество шагов", "10000")
 ]
 
 entries = {}
@@ -114,13 +118,7 @@ for field, default in fields:
     frame.pack(fill="x", padx=10, pady=5)
     entries[field] = entry
 
-entry_d = entries["период решетки в метрах"]
-entry_N = entries["Число штрихов"]
-entry_lambda1 = entries["Длина волны 1 в метрах"]
-entry_lambda2 = entries["Длина волны 2 в метрах"]
-entry_lambda3 = entries["Длина волны 3 в метрах"]
-
-button = ttk.Button(root, text="Запустить симуляцию", command=run_simulation)
-button.pack(pady=20)
+submit_button = tk.Button(root, text="Submit", command=on_submit)
+submit_button.pack(pady=20)
 
 root.mainloop()
