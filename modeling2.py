@@ -8,9 +8,10 @@ from tkinter import messagebox
 splits_number = 2
 split_width = 0.001
 period = 0.005
-wave_length = 500e-9
+wave_length = 400e-9
 end_angle = 0.01
 step_count = 10000
+max_wave_length = 500e-9
 
 def intensive(splits_number, split_width, period, wave_length, rad):
     alpha = (np.pi * split_width * np.sin(rad)) / wave_length
@@ -45,7 +46,7 @@ def wave_length_to_rgb(wavelength, gamma):
     else:
         return gamma, gamma, gamma
 
-def draw_lines(intensive_data, angle_data, wave_length, end_angle):
+def draw_lines(intensive_data, angle_data, wave_length, end_angle, intensive_data_2 = 0, angle_data_2 = 0):
     fig, ax = plt.subplots()
     canvas = FigureCanvasTkAgg(fig, master=root)
     ax.cla()
@@ -53,20 +54,30 @@ def draw_lines(intensive_data, angle_data, wave_length, end_angle):
     min_x = -end_angle
     max_x = end_angle
     max_intensity = np.max(intensive_data)
+    # max_intensity2 = np.max(intensive_data_2)
 
     for i in range(len(intensive_data)):
         normalized_x = (angle_data[i] - min_x) / (max_x - min_x)
         line_x = normalized_x * canvas.get_tk_widget().winfo_width()
         color = wave_length_to_rgb(wave_length, abs(intensive_data[i] / max_intensity))
 
+        # normalized_x_2 = (angle_data_2[i] - min_x) / (max_x - min_x)
+        # line_x_2 = normalized_x_2 * canvas.get_tk_widget().winfo_width()
+        # color_2 = wave_length_to_rgb(max_wave_length, abs(intensive_data_2[i] / max_intensity2))
+
+        # if intensive_data_2[i] > intensive_data[i]:
+        #     ax.plot([line_x_2, line_x_2], [0, canvas.get_tk_widget().winfo_height()], color=color_2, linewidth=0.1)
+        #     continue
+
         ax.plot([line_x, line_x], [0, canvas.get_tk_widget().winfo_height()], color=color, linewidth=0.1)
 
     canvas.draw()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-def draw_graph(intensive_data, angle_data):
+def draw_graph(intensive_data, angle_data, intensive_data_2 = 0, angle_data_2 = 0):
     fig, ax = plt.subplots()
     ax.plot(angle_data, intensive_data, color='blue')
+    ax.plot(angle_data_2, intensive_data_2, color='orange')
     ax.set_xlabel('Angle Θ, rad')
     ax.set_ylabel('Intensity I/I₀, W/m²')
     ax.grid(True)
@@ -83,6 +94,9 @@ def on_submit():
     end_angle = float(entries["Конечный угол"].get())
     step_count = int(entries["Количество шагов"].get())
     
+    if (split_width > period): 
+        return
+
     intensive_data, angle_data = count_graph_data(
         splits_number,
         split_width,
@@ -92,8 +106,21 @@ def on_submit():
         step_count
     )
 
+    # intensive_data_2, angle_data_2 = count_graph_data(
+    #     splits_number,
+    #     split_width,
+    #     period,
+    #     max_wave_length,
+    #     end_angle,
+    #     step_count
+    # )
+
     draw_graph(intensive_data, angle_data)
     draw_lines(intensive_data, angle_data, wave_length, end_angle)
+
+    #Вызов для спектра
+    # draw_graph(intensive_data, angle_data, intensive_data_2, angle_data_2)
+    # draw_lines(intensive_data, angle_data, wave_length, end_angle, intensive_data_2, angle_data_2)
 
 root = tk.Tk()
 root.title("Graph Plotter")
@@ -102,7 +129,7 @@ fields = [
     ("Количество разбиений", "2"),
     ("Ширина разбиений", "0.001"),
     ("Период", "0.005"),
-    ("Длина волны", "600e-9"),
+    ("Длина волны", "400e-9"),
     ("Конечный угол", "0.001"),
     ("Количество шагов", "10000")
 ]
